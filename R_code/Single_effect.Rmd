@@ -1,0 +1,410 @@
+---
+title: "Single_effect"
+output: pdf_document
+author: "Jungang Zou"
+date: 4/28/2021
+version: 1.0.0
+---
+
+```{r setup, include=TRUE}
+# import packages and define some useful mathematical functions
+knitr::opts_chunk$set(echo = TRUE)
+library(parallel)
+library(doParallel)
+library(foreach)
+library("MCMCpack")
+
+sigmoid = function(x) return(1 / (1 + exp(-x)))
+
+softmax = function(x){
+  e_x = exp(x - max(x))
+  return(e_x / sum(e_x))
+}
+
+```
+
+## Genetic Association Selection based on Bayesian Methods
+
+Nowadays, statistical genetics is becoming more and more popular. It uses statistical tools to find the statistical association between disease(or phenotype) with a set of candidate genes, which provides a pre-selection tool to  Biologists. However, in genetic data, usually a large amount of genes(genotype data) are provided for each sample, but only few samples(each stands for an individual) are able to be exploited. This special biological context can lead to a lot of problems in statistical models, such as intensive computation, high dimension curse, non-invertible normal matrix in ordinary least square. On the other hand, Bayesian statistical method gives another framework to cope with genetic association problems, which mixes up the information based on personal belief and data. These kind of models are applied in statistical genetic problems more and more frequently.
+
+To solve the problems caused by genetic data, a lot of different methods are proposed. The main ideas of these models are based on the fact that we only need to identify the most significant genes instead of the whole genetic dataset. In fact, a series of statistical methods built by frequentists can be exploited for the same application purpose, such as shrinkage method(Lasso for example), step-wise regression. These methods can identify the covariates of the most statistical significance. Also, in Bayesian framework, variable selection technique or model averaging technique can be used. Bayesian variable selection methods specify special prior distributions for parameters in regression, where the inference based on posterior distributions will show whether this covariate will be included in models. Among a broad range of priors, a very useful prior is [Spike-Slab prior](https://en.wikipedia.org/wiki/Spike-and-slab_regression). On the other hand, Bayesian Model Averaging considers probabilities of covariates subsets separately, instead of the whole dataset. In this method, datasets are separated into different subsets by columns, then regression models will be fitted on each subset of variables. Finally, posterior probability of each model will be calculated with the evidence of data. Generally speaking, there are totally $2^p$ models, $p$ denotes the number of genes. To reduce the intensive computation, "single effect" model is often specified, which separates the whole data into only $p$ different subsets and each subset contains only one variable(gene). For Bayesian Model Averaging, we consider the effect of only one gene separately, while the co-effect of all genes will be applied in Bayesian Variable Selection.
+
+In this notebook, we code 2 algorithms to identify significant genes associated with phenotypes in R code, based on Bayesian Variable Selection technique and Bayesian Model Averaging technique respectively.
+
+### Single Effect Logistic Regression based on Bayesian Model Averaging
+
+In our context of single effect logistic regression model, only one gene will be included in regression. Formally, we can write down the likelihood of j-th model:
+
+$p(y | x^j, \beta_0^j, \beta_1^j, M^j)= \prod_i^n(sigmoid(x_i^j * \beta_1^j + \beta_0^j))^{y_i}(1 - sigmoid(x_i^j * \beta_1^j + \beta_0^j))^{1-y_i} $, where $x^j$ is the j-th variable, $x_i^j$ is j-th variable of i-th sample, $M^j$ gives this j-th model.
+
+The process of Single Effect Bayesian Model Averaging(BMA) can be followed by 3 steps: 
+1. Specify a prior inclusion probability for each single effect model $\pi(M_j),j=1,2...p$ with $\sum_1^p\pi(M_j) = 1$ constraint. 
+2. Specify prior of parameters in each model $\pi(\beta_0^j, \beta_1^j | M_j)$, then sample $\beta_0^j$ and $\beta_1^j$ from prior distribution.
+3. Calculate likelihood under model $p(y |x^j, M_j ) = \int \int p(y|x^j, \beta_0^j, \beta_1^j, M_j) \pi(\beta_0^j, \beta_1^j | M_j) d\beta_0^jd\beta_1^j$ by Monte Carlo integrals.
+4. Calculate posterior inclusion probability for each model by Bayes Rule $\pi(M_j | y, x^j) = \frac{\pi(M_j) *p(y |x^j, M_j ) }{\sum_1^p\pi(M_j) *p(y |x^j, M_j )}$.
+5. Use MCMC or Variation Inference methods to infer posterior distributions for each pair ($\beta_0^j$, $\beta_1^j$), if needed. 
+
+#### Simple BMA without Inference
+
+In most of the scenario of genetic association study, the effect of parameters for significant genes is not rather important. Instead, posterior inclusion probability(PIP) is what we concern about. Due to this convenient situation, the algorithm without inference is typically rapid, with no loop in the procedure.
+
+In our algorithm, we specify a uniform distribution on user-defined interval $[lower, higher]$ for $\beta_0^j$, and user-defined normal distribution $Normal(\mu_0, \sigma_0^2)$ for $\beta_1^j$. The code of simple non-inference BMA method is as follow:
+
+```{r function_simple_BMA}
+# calculate log-likelihood for a pair of parameters.
+log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
+  lm = beta_0 + beta_1 * x
+  return(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
+}
+
+# the main algorithm of Bayesian Model Averaging
+# Input:
+# X: a matrix of genotype data. The process of centralization or normalization should be calculated before this algorithm if needed.
+# Y: a vector of phenotype data, only binary data(0 or 1) is allowed. 
+# prior_ip: prior inclusion probability for each model. The size of vector should be consistent with variables of X. If prior_ip is not normalized(sum to 1), a process of normalization will be done in algorithm.
+# mu0: a scalar to specify the prior normal mean of beta_1
+# sigma0: a scalar to specify the prior normal standard deviation of beta_1
+# lower: a scalar to specify the prior lower bound of uniform distribution for beta_0
+# higher: a scalar to specify the prior upper bound of uniform distribution for beta_0
+# sample_size: a scalar to specify the number of samples for parameters to perform Monte Carlo Integral for p(data | M_j)
+
+# output:
+# A vector of posterior inclusion probability for each variable.
+
+BMA = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000){
+  # preparation
+  n = nrow(X)
+  p = ncol(X)
+  if(length(prior_ip) != p){
+    stop("number of dimensions of prior inclusion probability and X are not consistent")
+  }
+  if(sum(prior_ip) != 1)
+    prior_ip = prior_ip / sum(prior_ip)
+  
+  # sample parameters
+  beta_0 = sapply(1:p, function(x){runif(sample_size, lower, higher)})
+  beta_1 = sapply(1:p, function(x){rnorm(sample_size, mu0, sigma0)})
+  
+  # calculate log-likelihood condition on only model
+  logp_likelihood = sapply(1:p, function(j){
+    if (p == 1){
+      beta_0_j = beta_0
+      beta_1_j = beta_1
+      x_j = X
+    }else{
+      beta_0_j = beta_0[, j]
+      beta_1_j = beta_1[, j]
+      x_j = X[, j]
+    }
+    log_likelihood_j = log(mean(exp(sapply(1:sample_size, function(i){
+      log_logistic_likelihood(x_j, Y, beta_0_j[i], beta_1_j[i])
+    }))))
+    log_likelihood_j
+  })
+  
+  # calculate PIP
+  logp_prior_ip = log(prior_ip)
+  posterior_ip = softmax(logp_prior_ip + logp_likelihood)
+  return(posterior_ip)
+}
+
+
+
+# simulate
+n = 100
+mu0 = 0
+sigma0 = 1
+lower = -10
+higher = 10
+X = cbind(rnorm(n), rnorm(n, 1), rnorm(n, 1, 5))
+b = c(2,5,-2)
+Y = rbinom(n, 1, sigmoid(X %*% b + 2))
+
+BMA(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher)
+
+```
+
+
+
+
+
+# The rest of notebook has not been completed yet and will be done a few days later.
+
+
+
+
+#### BMA with Inference based on NUTS
+
+```{r function_HMC}
+
+
+log_posterior = function(x, y, beta_0, beta_1, mu0, sigma0, tol = 1e-100){
+  lm = beta_0 + beta_1 * x
+  sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)) - (beta_1 - mu0)^2/(2 * sigma0^2)
+}
+
+
+dlogp_dbeta0 = function(x, y, beta_0, beta_1){
+  lm = beta_0 + beta_1 * x
+  sum(y * (1 - sigmoid(lm)) + (y - 1) * sigmoid(lm))
+}
+
+dlogp_dbeta1 = function(x, y, beta_0, beta_1, mu0, sigma0){
+  lm = beta_0 + beta_1 * x
+  sum(y * x * (1 - sigmoid(lm)) + x * (y - 1) * sigmoid(lm)) - (beta_1 - mu0) / (sigma0^2)
+}
+
+
+beta_0_in_region = function(lower, higher, beta_0){
+  if (beta_0 <= higher || beta_0 >= lower)
+    return(TRUE)
+  else
+    return(FALSE)
+}
+
+
+       
+
+
+leapfrog = function(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, L = 10, e = 0.1, accept_n = 0){
+  phi = rnorm(2, mean = c(0, 0), sd = sqrt(M))
+  beta_new = c(beta_0, beta_1)
+  phi_new = phi
+  for (i in 1:L) {
+    pd = c(dlogp_dbeta0(x, y, beta_new[1], beta_new[2]), dlogp_dbeta1(x, y, beta_new[1], beta_new[2], mu0, sigma0))
+    phi_new = phi_new + 0.5 * e * pd
+    
+    beta_new = beta_new + e * M_1 * phi_new
+    
+    pd = c(dlogp_dbeta0(x, y, beta_new[1], beta_new[2]), dlogp_dbeta1(x, y, beta_new[1], beta_new[2], mu0, sigma0))
+    phi_new = phi_new + 0.5 * e * pd
+    
+    
+    if(!beta_0_in_region(lower, higher, beta_new[1]))
+            phi_new[1] = phi_new[1] * -1
+    
+  }
+  
+  log_r = log_posterior(x, y, beta_new[1], beta_new[2], mu0, sigma0) - log_posterior(x, y, beta_0, beta_1, mu0, sigma0) + (phi_new^2 %*% M_1)[1,1] - (phi^2 %*% M_1)[1,1]
+  #print(exp(log_r))
+  if (log_r >= log(runif(1)) && beta_0_in_region(lower, higher, beta_new[1])){
+    #print("accept")
+    return(list(beta_0 = beta_new[1], beta_1 = beta_new[2], accept_n = accept_n + 1))
+  }else{
+    #print("reject")
+    return(list(beta_0 = beta_0, beta_1 = beta_1, accept_n = accept_n))
+  }
+  
+  
+}
+
+HMC = function(burn_n, sample_n, sample_gap = 2, x, y, beta_0, beta_1, mu0, sigma0, lower, higher, scale){
+  #M = c(1/(1/12 * (higher - lower)^2), 1/ (sigma0^2)) * scale
+  M = c(1, 1) * scale
+  M_1 = 1 / M
+  accept_n = 1
+  beta_0_sample = c()
+  beta_1_sample = c()
+  for (i in 1:burn_n) {
+    result = leapfrog(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, accept_n = accept_n)
+    beta_0 = result$beta_0
+    beta_1 = result$beta_1
+    accept_n = result$accept_n
+    #print(accept_n)
+  }
+  print(paste("accept rate in burn in phrase:", accept_n / burn_n))
+  accept_n = 1
+  for (i in 1:(sample_n * sample_gap)) {
+    result = leapfrog(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, accept_n = accept_n)
+    beta_0 = result$beta_0
+    beta_1 = result$beta_1
+    accept_n = result$accept_n
+    if (i %% sample_gap == 0){
+      beta_0_sample = c(beta_0_sample, beta_0)
+      beta_1_sample = c(beta_1_sample, beta_1)
+    }
+    
+    
+  }
+  print(paste("accept rate in sample phrase:", accept_n / (sample_n * sample_gap)))
+  return(list(beta_0 = beta_0_sample, beta_1 = beta_1_sample))
+}
+
+
+n = 1000
+X = cbind(rnorm(n, 10), rnorm(n, 1), rnorm(n, 1, 5))
+X = X - colMeans(X)
+b = c(2,5,-2)
+Y = rbinom(n, 1, sigmoid(X %*% b + 2))
+x = X[, 1]
+
+
+beta0 = runif(1, lower, higher)
+beta1 = rnorm(1, mu0, sigma0)
+samples1 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+
+beta0 = runif(1, lower, higher)
+beta1 = rnorm(1, mu0, sigma0)
+samples2 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+
+beta0 = runif(1, lower, higher)
+beta1 = rnorm(1, mu0, sigma0)
+samples3 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+
+beta_0 = list(samples1$beta_0, samples2$beta_0, samples3$beta_0)
+beta_1 = list(samples1$beta_1, samples2$beta_1, samples3$beta_1)
+
+HMC_convergence = function(beta_0, beta_1){
+  beta_0_mcmc = lapply(beta_0, function(x) mcmc(x))
+  beta_1_mcmc = lapply(beta_1, function(x) mcmc(x))
+  combinedchains_beta_0 = mcmc.list(beta_0_mcmc)
+  plot(combinedchains_beta_0)
+  print(gelman.diag(combinedchains_beta_0))
+  gelman.plot(combinedchains_beta_0)
+  
+  combinedchains_beta_1 = mcmc.list(beta_1_mcmc)
+  plot(combinedchains_beta_1)
+  print(gelman.diag(combinedchains_beta_1))
+  gelman.plot(combinedchains_beta_1)
+}
+
+HMC_convergence(beta_0, beta_1)
+
+#for (i in 1:dim(result$y_pred)[2]) {
+#  combinedchains = mcmc.list(result$y_pred[, i], result2$y_pred[, i], result3$y_pred[, i]) 
+#  if(gelman.diag(combinedchains)[[1]][1] > 1.1)
+#    print(paste(i, gelman.diag(combinedchains)[[1]][1]))
+#}
+
+
+
+# check the convergence of beta_0
+combinedchains = mcmc.list(samples1$beta_0, samples2$beta_0, samples3$beta_0)
+plot(combinedchains)
+gelman.diag(combinedchains)
+gelman.plot(combinedchains)
+
+# check the convergence of beta_1
+combinedchains = mcmc.list(mcmc(samples1$beta_1), mcmc(samples2$beta_1), mcmc(samples3$beta_1))
+plot(combinedchains)
+gelman.diag(combinedchains)
+gelman.plot(combinedchains)
+
+
+```
+
+
+
+
+
+```{r function_BMA}
+
+
+log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
+  lm = beta_0 + beta_1 * x
+  return(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
+}
+
+
+BMA = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000, n_chain = 3){
+  n = nrow(X)
+  p = ncol(X)
+  if(length(prior_ip) != p){
+    stop("number of dimensions of prior inclusion probability and X are not consistent")
+  }
+  if(sum(prior_ip) != 1)
+    prior_ip = prior_ip / sum(prior_ip)
+  beta_0 = sapply(1:p, function(x){runif(sample_size, lower, higher)})
+  beta_1 = sapply(1:p, function(x){rnorm(sample_size, mu0, sigma0)})
+  
+  
+  
+  
+  registerDoParallel(4)
+  
+  chains = sapply(1:p, function(j){
+    foreach(i = 1:n_chain, .combine = function(x, y) {list(beta_0 = cbind(x[["beta_0"]], y[["beta_0"]]), beta_1 = cbind(x[["beta_1"]], y[["beta_1"]])) }) %dopar% {
+    beta0 = beta_0[i, j]
+    beta1 = beta_1[i, j]
+    HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+  }
+  })
+  
+  
+ 
+  
+  
+  logp_likelihood = sapply(1:p, function(j){
+    if (p == 1){
+      beta_0_j = beta_0
+      beta_1_j = beta_1
+      x_j = X
+    }else{
+      beta_0_j = beta_0[, j]
+      beta_1_j = beta_1[, j]
+      x_j = X[, j]
+    }
+    log_likelihood_j = log(mean(exp(sapply(1:sample_size, function(i){
+      log_logistic_likelihood(x_j, Y, beta_0_j[i], beta_1_j[i])
+    }))))
+    log_likelihood_j
+  })
+  logp_prior_ip = log(prior_ip)
+  posterior_ip = softmax(logp_prior_ip + logp_likelihood)
+  return(posterior_ip)
+}
+
+BMA(X, Y, rep(1/ncol(X), ncol(X)), 0, 1, -10, 10)
+
+```
+
+
+### Bayesian Variable Selection based Logistic Regression
+
+This a Hamilton Monte Carlo Implementation for "Single effect" Bayesian Logistic Regression. In some genetic background, we need to find the association between a specific phenotype(disease or not) and a set of genes. In traditional setting, logistic regression can be used to cope with such problem. However, as the number of tested genes grows very rapidly, traditional logistic regression has several backdrops, that identifies very low association for each gene. In order to solve this problem, Bayesian Variable Selection are applied to select the most "significant" genes. In some extreme situations, only one gene are expected to be select. 
+
+
+In the fully-Bayesian model, vanilla logistic regression can be treated as $y \sim Bernoulli(sigmoid(b_0 + Xb))$, where $sigmoid(x) = \frac{1}{1 + exp(-x)}$. Introducing Variable Selection technique, we add a new discrete variable $g$, such that $g_i$ indicates the prior inclusion probability that $b_i$ will be included in regression model. Therefore, the whole likelihood will be $y \sim Bernoulli(sigmoid(b_0 + X(b \odot g)))$. Based on this model, we set the prior of $b_0$ as a flat prior which means $b_0 \varpropto 1$, and specify normal distribution for each $b_j$ as $b_j \sim N(\mu_0, \sigma_0)$. Since $g$ follows a discrete variable, we specify a vector prior $g_0$ for $g$ where $\sum_ig_{0i} = 1$ and a discrete uniform distribution will be used as default.
+
+
+
+### Simple Bayesian Logistic Regression
+
+To make the whole problem testable, we first implement a Hamilton Monte Carlo(HMC) based vanilla logistic regression to fit the model. HMC is a well-known Monte Carlo method based on Hmamilton Dynamic in Physics. An brief introduction can be find [here](https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo) . In this algorithm, we need to calculate the derivative of log-posterior distribution of each parameters.
+
+#### Fully-Bayesian Model
+
+To get the complete fully-Bayesian model, we need to carefully write down the likelihood function, prior and posterior distributions:
+
+Likelihood: $f(Y|X,b_0, b)  = \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_ib)))^{1 - y_i}$
+
+
+Prior: $b_0 \varpropto 1$, $\pi(b_i) \varpropto exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})$..
+
+
+Fully Posterior: $p(Y, b_0, b | X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i} * \prod_j^p exp(-\frac{(b_j - \mu_0)^2}{2\sigma_0^2})$
+
+
+Marginal Posterior: $p(b_0 | Y, b, X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i}$, $p(b_j | Y, b_0, X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i} * exp(-\frac{(b_j - \mu_0)^2}{2\sigma_0^2}) $
+
+
+
+
+### Fully-Bayesian Model
+
+To get the complete fully-Bayesian model, we need to carefully write down the likelihood function, prior and posterior distributions:
+
+
+Likelihood: $f(Y|X,b_0, b, g)  = \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_i(b \odot g)))^{1 - y_i}$
+
+
+Prior: $b_0 \varpropto 1$, $\pi(b_i) = \frac{1}{\sqrt{2\pi}\sigma_0}exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})$, $\pi(g_{0i}) = \frac{1}{p}$, where $p$ stands for the number of predictors.
+
+
+Fully Posterior: $p(Y, b_0, b, g | X) \varpropto \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_i(b \odot g)))^{1 - y_i} * \prod_i^p \frac{1}{\sigma_0}exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})$
+
+
+Marginal Posterior: $p(b_0)$
+
+ 
+

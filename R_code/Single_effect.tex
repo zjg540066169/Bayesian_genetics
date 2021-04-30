@@ -1,0 +1,283 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={Single\_effect},
+  pdfauthor={Jungang Zou},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage[margin=1in]{geometry}
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+
+\title{Single\_effect}
+\author{Jungang Zou}
+\date{4/28/2021}
+
+\begin{document}
+\maketitle
+
+\hypertarget{genetic-association-selection-based-on-bayesian-methods}{%
+\subsection{Genetic Association Selection based on Bayesian
+Methods}\label{genetic-association-selection-based-on-bayesian-methods}}
+
+Nowadays, statistical genetics is becoming more and more popular. It
+uses statistical tools to find the statistical association between
+disease(or phenotype) with a set of candidate genes, which provides a
+pre-selection tool to Biologists. However, in genetic data, usually a
+large amount of genes(genotype data) are provided for each sample, but
+only few samples(each stands for an individual) are able to be
+exploited. This special biological context can lead to a lot of problems
+in statistical models, such as intensive computation, high dimension
+curse, non-invertible normal matrix in ordinary least square. On the
+other hand, Bayesian statistical method gives another framework to cope
+with genetic association problems, which mixes up the information based
+on personal belief and data. These kind of models are applied in
+statistical genetic problems more and more frequently.
+
+To solve the problems caused by genetic data, a lot of different methods
+are proposed. The main ideas of these models are based on the fact that
+we only need to identify the most significant genes instead of the whole
+genetic dataset. In fact, a series of statistical methods built by
+frequentists can be exploited for the same application purpose, such as
+shrinkage method(Lasso for example), step-wise regression. These methods
+can identify the covariates of the most statistical significance. Also,
+in Bayesian framework, variable selection technique or model averaging
+technique can be used. Bayesian variable selection methods specify
+special prior distributions for parameters in regression, where the
+inference based on posterior distributions will show whether this
+covariate will be included in models. Among a broad range of priors, a
+very useful prior is
+\href{https://en.wikipedia.org/wiki/Spike-and-slab_regression}{Spike-Slab
+prior}. On the other hand, Bayesian Model Averaging considers
+probabilities of covariates subsets separately, instead of the whole
+dataset. In this method, datasets are separated into different subsets
+by columns, then regression models will be fitted on each subset of
+variables. Finally, posterior probability of each model will be
+calculated with the evidence of data. Generally speaking, there are
+totally \(2^p\) models, \(p\) denotes the number of genes. To reduce the
+intensive computation, ``single effect'' model is often specified, which
+separates the whole data into only \(p\) different subsets and each
+subset contains only one variable(gene). For Bayesian Model Averaging,
+we consider the effect of only one gene separately, while the co-effect
+of all genes will be applied in Bayesian Variable Selection.
+
+In this notebook, we code 2 algorithms to identify significant genes
+associated with phenotypes in R code, based on Bayesian Variable
+Selection technique and Bayesian Model Averaging technique respectively.
+
+\hypertarget{single-effect-bayesian-model-averaging}{%
+\subsubsection{Single Effect Bayesian Model
+Averaging}\label{single-effect-bayesian-model-averaging}}
+
+The process of Single Effect Bayesian Model Averaging(BMA) is followed
+by 3 steps: 1. We specify a prior distribution for each single effect
+model \(p_i,i=1,2...p\) with \(\sum_i^pp_i = 1\) constraint.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sigmoid =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x) }\KeywordTok{return}\NormalTok{(}\DecValTok{1} \OperatorTok{/}\StringTok{ }\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\KeywordTok{exp}\NormalTok{(}\OperatorTok{-}\NormalTok{x)))}
+
+\NormalTok{softmax =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x)\{}
+\NormalTok{  e_x =}\StringTok{ }\KeywordTok{exp}\NormalTok{(x }\OperatorTok{-}\StringTok{ }\KeywordTok{max}\NormalTok{(x))}
+  \KeywordTok{return}\NormalTok{(e_x }\OperatorTok{/}\StringTok{ }\KeywordTok{sum}\NormalTok{(e_x))}
+\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+Bayesian Variable Selection based Logistic Regression
+
+This a Hamilton Monte Carlo Implementation for ``Single effect''
+Bayesian Logistic Regression. In some genetic background, we need to
+find the association between a specific phenotype(disease or not) and a
+set of genes. In traditional setting, logistic regression can be used to
+cope with such problem. However, as the number of tested genes grows
+very rapidly, traditional logistic regression has several backdrops,
+that identifies very low association for each gene. In order to solve
+this problem, Bayesian Variable Selection are applied to select the most
+``significant'' genes. In some extreme situations, only one gene are
+expected to be select.
+
+In the fully-Bayesian model, vanilla logistic regression can be treated
+as \(y \sim Bernoulli(sigmoid(b_0 + Xb))\), where
+\(sigmoid(x) = \frac{1}{1 + exp(-x)}\). Introducing Variable Selection
+technique, we add a new discrete variable \(g\), such that \(g_i\)
+indicates the prior inclusion probability that \(b_i\) will be included
+in regression model. Therefore, the whole likelihood will be
+\(y \sim Bernoulli(sigmoid(b_0 + X(b \odot g)))\). Based on this model,
+we set the prior of \(b_0\) as a flat prior which means
+\(b_0 \varpropto 1\), and specify normal distribution for each \(b_j\)
+as \(b_j \sim N(\mu_0, \sigma_0)\). Since \(g\) follows a discrete
+variable, we specify a vector prior \(g_0\) for \(g\) where
+\(\sum_ig_{0i} = 1\) and a discrete uniform distribution will be used as
+default.
+
+\hypertarget{simple-bayesian-logistic-regression}{%
+\subsubsection{Simple Bayesian Logistic
+Regression}\label{simple-bayesian-logistic-regression}}
+
+To make the whole problem testable, we first implement a Hamilton Monte
+Carlo(HMC) based vanilla logistic regression to fit the model. HMC is a
+well-known Monte Carlo method based on Hmamilton Dynamic in Physics. An
+brief introduction can be find
+\href{https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo}{here} . In
+this algorithm, we need to calculate the derivative of log-posterior
+distribution of each parameters.
+
+\hypertarget{fully-bayesian-model}{%
+\paragraph{Fully-Bayesian Model}\label{fully-bayesian-model}}
+
+To get the complete fully-Bayesian model, we need to carefully write
+down the likelihood function, prior and posterior distributions:
+
+Likelihood:
+\(f(Y|X,b_0, b) = \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_ib)))^{1 - y_i}\)
+
+Prior: \(b_0 \varpropto 1\),
+\(\pi(b_i) \varpropto exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})\)..
+
+Fully Posterior:
+\(p(Y, b_0, b | X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i} * \prod_j^p exp(-\frac{(b_j - \mu_0)^2}{2\sigma_0^2})\)
+
+Marginal Posterior:
+\(p(b_0 | Y, b, X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i}\),
+\$p(b\_j \textbar{} Y, b\_0, X) \varpropto \prod\_i\^{}n (sigmoid(b\_0 +
+X\_ib ))\^{}\{y\_i\}(1 - sigmoid(b\_0 + X\_ib))\^{}\{1 - y\_i\} *
+exp(-\frac{(b_j - \mu_0)^2}{2\sigma_0^2}) \$
+
+\hypertarget{fully-bayesian-model-1}{%
+\subsubsection{Fully-Bayesian Model}\label{fully-bayesian-model-1}}
+
+To get the complete fully-Bayesian model, we need to carefully write
+down the likelihood function, prior and posterior distributions:
+
+Likelihood:
+\(f(Y|X,b_0, b, g) = \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_i(b \odot g)))^{1 - y_i}\)
+
+Prior: \(b_0 \varpropto 1\),
+\(\pi(b_i) = \frac{1}{\sqrt{2\pi}\sigma_0}exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})\),
+\(\pi(g_{0i}) = \frac{1}{p}\), where \(p\) stands for the number of
+predictors.
+
+Fully Posterior:
+\(p(Y, b_0, b, g | X) \varpropto \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_i(b \odot g)))^{1 - y_i} * \prod_i^p \frac{1}{\sigma_0}exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})\)
+
+Marginal Posterior: \(p(b_0)\)
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(cars)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      speed           dist       
+##  Min.   : 4.0   Min.   :  2.00  
+##  1st Qu.:12.0   1st Qu.: 26.00  
+##  Median :15.0   Median : 36.00  
+##  Mean   :15.4   Mean   : 42.98  
+##  3rd Qu.:19.0   3rd Qu.: 56.00  
+##  Max.   :25.0   Max.   :120.00
+\end{verbatim}
+
+\hypertarget{including-plots}{%
+\subsection{Including Plots}\label{including-plots}}
+
+You can also embed plots, for example:
+
+\includegraphics{Single_effect_files/figure-latex/pressure-1.pdf}
+
+Note that the \texttt{echo\ =\ FALSE} parameter was added to the code
+chunk to prevent printing of the R code that generated the plot.
+
+\end{document}
