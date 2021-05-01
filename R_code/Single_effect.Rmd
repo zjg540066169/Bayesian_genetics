@@ -37,7 +37,7 @@ In our context of single effect logistic regression model, only one gene will be
 
 $p(y | x^j, \beta_0^j, \beta_1^j, M^j)= \prod_i^n(sigmoid(x_i^j * \beta_1^j + \beta_0^j))^{y_i}(1 - sigmoid(x_i^j * \beta_1^j + \beta_0^j))^{1-y_i} $, where $x^j$ is the j-th variable, $x_i^j$ is j-th variable of i-th sample, $M^j$ gives this j-th model.
 
-The process of Single Effect Bayesian Model Averaging(BMA) can be followed by 3 steps: 
+The process of Single Effect Bayesian Model Averaging(BMA) can be followed by 5 steps: 
 1. Specify a prior inclusion probability for each single effect model $\pi(M_j),j=1,2...p$ with $\sum_1^p\pi(M_j) = 1$ constraint. 
 2. Specify prior of parameters in each model $\pi(\beta_0^j, \beta_1^j | M_j)$, then sample $\beta_0^j$ and $\beta_1^j$ from prior distribution.
 3. Calculate likelihood under model $p(y |x^j, M_j ) = \int \int p(y|x^j, \beta_0^j, \beta_1^j, M_j) \pi(\beta_0^j, \beta_1^j | M_j) d\beta_0^jd\beta_1^j$ by Monte Carlo integrals.
@@ -198,7 +198,7 @@ leapfrog = function(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, L 
   
 }
 
-HMC = function(burn_n, sample_n, sample_gap = 2, x, y, beta_0, beta_1, mu0, sigma0, lower, higher, scale){
+HMC = function(burn_n, sample_n, sample_gap = 2, x, y, beta_0, beta_1, mu0, sigma0, lower, higher, scale, L = 100, e = 0.01){
   #M = c(1/(1/12 * (higher - lower)^2), 1/ (sigma0^2)) * scale
   M = c(1, 1) * scale
   M_1 = 1 / M
@@ -215,7 +215,7 @@ HMC = function(burn_n, sample_n, sample_gap = 2, x, y, beta_0, beta_1, mu0, sigm
   print(paste("accept rate in burn in phrase:", accept_n / burn_n))
   accept_n = 1
   for (i in 1:(sample_n * sample_gap)) {
-    result = leapfrog(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, accept_n = accept_n)
+    result = leapfrog(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, L = L, e = e, accept_n = accept_n)
     beta_0 = result$beta_0
     beta_1 = result$beta_1
     accept_n = result$accept_n
@@ -241,15 +241,15 @@ x = X[, 1]
 
 beta0 = runif(1, lower, higher)
 beta1 = rnorm(1, mu0, sigma0)
-samples1 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+samples1 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100, L = 100, e = 0.01)
 
 beta0 = runif(1, lower, higher)
 beta1 = rnorm(1, mu0, sigma0)
-samples2 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+samples2 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100, L = 100, e = 0.01)
 
 beta0 = runif(1, lower, higher)
 beta1 = rnorm(1, mu0, sigma0)
-samples3 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
+samples3 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100, L = 100, e = 0.01)
 
 beta_0 = list(samples1$beta_0, samples2$beta_0, samples3$beta_0)
 beta_1 = list(samples1$beta_1, samples2$beta_1, samples3$beta_1)
@@ -275,20 +275,6 @@ HMC_convergence(beta_0, beta_1)
 #  if(gelman.diag(combinedchains)[[1]][1] > 1.1)
 #    print(paste(i, gelman.diag(combinedchains)[[1]][1]))
 #}
-
-
-
-# check the convergence of beta_0
-combinedchains = mcmc.list(samples1$beta_0, samples2$beta_0, samples3$beta_0)
-plot(combinedchains)
-gelman.diag(combinedchains)
-gelman.plot(combinedchains)
-
-# check the convergence of beta_1
-combinedchains = mcmc.list(mcmc(samples1$beta_1), mcmc(samples2$beta_1), mcmc(samples3$beta_1))
-plot(combinedchains)
-gelman.diag(combinedchains)
-gelman.plot(combinedchains)
 
 
 ```

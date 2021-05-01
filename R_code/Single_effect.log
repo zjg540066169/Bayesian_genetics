@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2021) (preloaded format=pdflatex 2021.4.29)  30 APR 2021 16:12
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2021) (preloaded format=pdflatex 2021.4.29)  1 MAY 2021 00:11
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -341,8 +341,7 @@ line 40.
 File: l3backend-pdftex.def 2021-03-18 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count281
 \l__pdf_internal_box=\box50
-)
-No file Single_effect.aux.
+) (./Single_effect.aux)
 \openout1 = `Single_effect.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 107.
@@ -390,6 +389,7 @@ Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 LaTeX Info: Redefining \ref on input line 107.
 LaTeX Info: Redefining \pageref on input line 107.
 LaTeX Info: Redefining \nameref on input line 107.
+(./Single_effect.out) (./Single_effect.out)
 \@outlinefile=\write4
 \openout4 = `Single_effect.out'.
 
@@ -463,34 +463,34 @@ LaTeX Font Info:    Trying to load font information for U+msb on input line 109
 (/Users/jungang/Library/TinyTeX/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <10> on input line 148.
-LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <7> on input line 148.
-LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <5> on input line 148.
 LaTeX Font Info:    Trying to load font information for T1+lmtt on input line 1
-68.
+11.
 (/Users/jungang/Library/TinyTeX/texmf-dist/tex/latex/lm/t1lmtt.fd
 File: t1lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Font shape `T1/lmtt/bx/n' in size <10> not available
-(Font)              Font shape `T1/lmtt/b/n' tried instead on input line 169.
+(Font)              Font shape `T1/lmtt/b/n' tried instead on input line 113.
 [1
 
 {/Users/jungang/Library/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
+LaTeX Font Info:    External font `lmex10' loaded for size
+(Font)              <10> on input line 210.
+LaTeX Font Info:    External font `lmex10' loaded for size
+(Font)              <7> on input line 210.
+LaTeX Font Info:    External font `lmex10' loaded for size
+(Font)              <5> on input line 210.
 ! Missing $ inserted.
 <inserted text> 
                 $
-l.234 \$p(b\_j \textbar{} Y, b\_0, X) \varpropto
-                                                 \prod\_i\^{}n (sigmoid(b\_0 + 
+l.229 \$p(y \textbar{} x\^{}j, \beta
+                                    \_0\^{}j, \beta\_1\^{}j, M\^{}j)= 
 Here is how much of TeX's memory you used:
- 10371 strings out of 480954
- 150729 string characters out of 5906449
- 452637 words of memory out of 5000000
- 27421 multiletter control sequences out of 15000+600000
- 443355 words of font info for 65 fonts, out of 8000000 for 9000
+ 10377 strings out of 480954
+ 150817 string characters out of 5906449
+ 452871 words of memory out of 5000000
+ 27423 multiletter control sequences out of 15000+600000
+ 443674 words of font info for 66 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 71i,6n,74p,312b,362s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 71i,6n,74p,312b,325s stack positions out of 5000i,500n,10000p,200000b,80000s
 
 !  ==> Fatal error occurred, no output PDF file produced!

@@ -107,6 +107,68 @@
 \begin{document}
 \maketitle
 
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# import packages and define some useful mathematical functions}
+\NormalTok{knitr}\OperatorTok{::}\NormalTok{opts_chunk}\OperatorTok{$}\KeywordTok{set}\NormalTok{(}\DataTypeTok{echo =} \OtherTok{TRUE}\NormalTok{)}
+\KeywordTok{library}\NormalTok{(parallel)}
+\KeywordTok{library}\NormalTok{(doParallel)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Loading required package: foreach
+\end{verbatim}
+
+\begin{verbatim}
+## Loading required package: iterators
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(foreach)}
+\KeywordTok{library}\NormalTok{(}\StringTok{"MCMCpack"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Loading required package: coda
+\end{verbatim}
+
+\begin{verbatim}
+## Loading required package: MASS
+\end{verbatim}
+
+\begin{verbatim}
+## ##
+## ## Markov Chain Monte Carlo Package (MCMCpack)
+\end{verbatim}
+
+\begin{verbatim}
+## ## Copyright (C) 2003-2021 Andrew D. Martin, Kevin M. Quinn, and Jong Hee Park
+\end{verbatim}
+
+\begin{verbatim}
+## ##
+## ## Support provided by the U.S. National Science Foundation
+\end{verbatim}
+
+\begin{verbatim}
+## ## (Grants SES-0350646 and SES-0350613)
+## ##
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sigmoid =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x) }\KeywordTok{return}\NormalTok{(}\DecValTok{1} \OperatorTok{/}\StringTok{ }\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\KeywordTok{exp}\NormalTok{(}\OperatorTok{-}\NormalTok{x)))}
+
+\NormalTok{softmax =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x)\{}
+\NormalTok{  e_x =}\StringTok{ }\KeywordTok{exp}\NormalTok{(x }\OperatorTok{-}\StringTok{ }\KeywordTok{max}\NormalTok{(x))}
+  \KeywordTok{return}\NormalTok{(e_x }\OperatorTok{/}\StringTok{ }\KeywordTok{sum}\NormalTok{(e_x))}
+\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
 \hypertarget{genetic-association-selection-based-on-bayesian-methods}{%
 \subsection{Genetic Association Selection based on Bayesian
 Methods}\label{genetic-association-selection-based-on-bayesian-methods}}
@@ -156,128 +218,132 @@ In this notebook, we code 2 algorithms to identify significant genes
 associated with phenotypes in R code, based on Bayesian Variable
 Selection technique and Bayesian Model Averaging technique respectively.
 
-\hypertarget{single-effect-bayesian-model-averaging}{%
-\subsubsection{Single Effect Bayesian Model
-Averaging}\label{single-effect-bayesian-model-averaging}}
+\hypertarget{single-effect-logistic-regression-based-on-bayesian-model-averaging}{%
+\subsubsection{Single Effect Logistic Regression based on Bayesian Model
+Averaging}\label{single-effect-logistic-regression-based-on-bayesian-model-averaging}}
 
-The process of Single Effect Bayesian Model Averaging(BMA) is followed
-by 3 steps: 1. We specify a prior distribution for each single effect
-model \(p_i,i=1,2...p\) with \(\sum_i^pp_i = 1\) constraint.
+In our context of single effect logistic regression model, only one gene
+will be included in regression. Formally, we can write down the
+likelihood of j-th model:
+
+\$p(y \textbar{} x\^{}j, \beta\_0\^{}j, \beta\_1\^{}j, M\^{}j)=
+\prod\_i\textsuperscript{n(sigmoid(x\_i}j * \beta\_1\^{}j +
+\beta\_0\textsuperscript{j))}\{y\_i\}(1 - sigmoid(x\_i\^{}j *
+\beta\_1\^{}j + \beta\_0\textsuperscript{j))}\{1-y\_i\} \$, where
+\(x^j\) is the j-th variable, \(x_i^j\) is j-th variable of i-th sample,
+\(M^j\) gives this j-th model.
+
+The process of Single Effect Bayesian Model Averaging(BMA) can be
+followed by 5 steps: 1. Specify a prior inclusion probability for each
+single effect model \(\pi(M_j),j=1,2...p\) with \(\sum_1^p\pi(M_j) = 1\)
+constraint. 2. Specify prior of parameters in each model
+\(\pi(\beta_0^j, \beta_1^j | M_j)\), then sample \(\beta_0^j\) and
+\(\beta_1^j\) from prior distribution. 3. Calculate likelihood under
+model
+\(p(y |x^j, M_j ) = \int \int p(y|x^j, \beta_0^j, \beta_1^j, M_j) \pi(\beta_0^j, \beta_1^j | M_j) d\beta_0^jd\beta_1^j\)
+by Monte Carlo integrals. 4. Calculate posterior inclusion probability
+for each model by Bayes Rule
+\(\pi(M_j | y, x^j) = \frac{\pi(M_j) *p(y |x^j, M_j ) }{\sum_1^p\pi(M_j) *p(y |x^j, M_j )}\).
+5. Use MCMC or Variation Inference methods to infer posterior
+distributions for each pair (\(\beta_0^j\), \(\beta_1^j\)), if needed.
+
+\hypertarget{simple-bma-without-inference}{%
+\paragraph{Simple BMA without
+Inference}\label{simple-bma-without-inference}}
+
+In most of the scenario of genetic association study, the effect of
+parameters for significant genes is not rather important. Instead,
+posterior inclusion probability(PIP) is what we concern about. Due to
+this convenient situation, the algorithm without inference is typically
+rapid, with no loop in the procedure.
+
+In our algorithm, we specify a uniform distribution on user-defined
+interval \([lower, higher]\) for \(\beta_0^j\), and user-defined normal
+distribution \(Normal(\mu_0, \sigma_0^2)\) for \(\beta_1^j\). The code
+of simple non-inference BMA method is as follow:
 
 \begin{Shaded}
 \begin{Highlighting}[]
-\NormalTok{sigmoid =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x) }\KeywordTok{return}\NormalTok{(}\DecValTok{1} \OperatorTok{/}\StringTok{ }\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\KeywordTok{exp}\NormalTok{(}\OperatorTok{-}\NormalTok{x)))}
-
-\NormalTok{softmax =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x)\{}
-\NormalTok{  e_x =}\StringTok{ }\KeywordTok{exp}\NormalTok{(x }\OperatorTok{-}\StringTok{ }\KeywordTok{max}\NormalTok{(x))}
-  \KeywordTok{return}\NormalTok{(e_x }\OperatorTok{/}\StringTok{ }\KeywordTok{sum}\NormalTok{(e_x))}
+\CommentTok{# calculate log-likelihood for a pair of parameters.}
+\NormalTok{log_logistic_likelihood =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x, y, beta_}\DecValTok{0}\NormalTok{, beta_}\DecValTok{1}\NormalTok{, }\DataTypeTok{tol =} \FloatTok{1e-100}\NormalTok{)\{}
+\NormalTok{  lm =}\StringTok{ }\NormalTok{beta_}\DecValTok{0} \OperatorTok{+}\StringTok{ }\NormalTok{beta_}\DecValTok{1} \OperatorTok{*}\StringTok{ }\NormalTok{x}
+  \KeywordTok{return}\NormalTok{(}\KeywordTok{sum}\NormalTok{(y }\OperatorTok{*}\StringTok{ }\KeywordTok{log}\NormalTok{(}\KeywordTok{sigmoid}\NormalTok{(lm) }\OperatorTok{+}\StringTok{ }\NormalTok{tol) }\OperatorTok{+}\StringTok{ }\NormalTok{(}\DecValTok{1} \OperatorTok{-}\StringTok{ }\NormalTok{y) }\OperatorTok{*}\StringTok{ }\KeywordTok{log}\NormalTok{(}\DecValTok{1} \OperatorTok{-}\StringTok{ }\KeywordTok{sigmoid}\NormalTok{(lm) }\OperatorTok{+}\StringTok{ }\NormalTok{tol)))}
 \NormalTok{\}}
-\end{Highlighting}
-\end{Shaded}
 
-Bayesian Variable Selection based Logistic Regression
+\CommentTok{# the main algorithm of Bayesian Model Averaging}
+\CommentTok{# Input:}
+\CommentTok{# X: a matrix of genotype data. The process of centralization or normalization should be calculated before this algorithm if needed.}
+\CommentTok{# Y: a vector of phenotype data, only binary data(0 or 1) is allowed. }
+\CommentTok{# prior_ip: prior inclusion probability for each model. The size of vector should be consistent with variables of X. If prior_ip is not normalized(sum to 1), a process of normalization will be done in algorithm.}
+\CommentTok{# mu0: a scalar to specify the prior normal mean of beta_1}
+\CommentTok{# sigma0: a scalar to specify the prior normal standard deviation of beta_1}
+\CommentTok{# lower: a scalar to specify the prior lower bound of uniform distribution for beta_0}
+\CommentTok{# higher: a scalar to specify the prior upper bound of uniform distribution for beta_0}
+\CommentTok{# sample_size: a scalar to specify the number of samples for parameters to perform Monte Carlo Integral for p(data | M_j)}
 
-This a Hamilton Monte Carlo Implementation for ``Single effect''
-Bayesian Logistic Regression. In some genetic background, we need to
-find the association between a specific phenotype(disease or not) and a
-set of genes. In traditional setting, logistic regression can be used to
-cope with such problem. However, as the number of tested genes grows
-very rapidly, traditional logistic regression has several backdrops,
-that identifies very low association for each gene. In order to solve
-this problem, Bayesian Variable Selection are applied to select the most
-``significant'' genes. In some extreme situations, only one gene are
-expected to be select.
+\CommentTok{# output:}
+\CommentTok{# A vector of posterior inclusion probability for each variable.}
 
-In the fully-Bayesian model, vanilla logistic regression can be treated
-as \(y \sim Bernoulli(sigmoid(b_0 + Xb))\), where
-\(sigmoid(x) = \frac{1}{1 + exp(-x)}\). Introducing Variable Selection
-technique, we add a new discrete variable \(g\), such that \(g_i\)
-indicates the prior inclusion probability that \(b_i\) will be included
-in regression model. Therefore, the whole likelihood will be
-\(y \sim Bernoulli(sigmoid(b_0 + X(b \odot g)))\). Based on this model,
-we set the prior of \(b_0\) as a flat prior which means
-\(b_0 \varpropto 1\), and specify normal distribution for each \(b_j\)
-as \(b_j \sim N(\mu_0, \sigma_0)\). Since \(g\) follows a discrete
-variable, we specify a vector prior \(g_0\) for \(g\) where
-\(\sum_ig_{0i} = 1\) and a discrete uniform distribution will be used as
-default.
+\NormalTok{BMA =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(X, Y, prior_ip, mu0, sigma0, lower, higher, }\DataTypeTok{sample_size =} \DecValTok{10000}\NormalTok{)\{}
+  \CommentTok{# preparation}
+\NormalTok{  n =}\StringTok{ }\KeywordTok{nrow}\NormalTok{(X)}
+\NormalTok{  p =}\StringTok{ }\KeywordTok{ncol}\NormalTok{(X)}
+  \ControlFlowTok{if}\NormalTok{(}\KeywordTok{length}\NormalTok{(prior_ip) }\OperatorTok{!=}\StringTok{ }\NormalTok{p)\{}
+    \KeywordTok{stop}\NormalTok{(}\StringTok{"number of dimensions of prior inclusion probability and X are not consistent"}\NormalTok{)}
+\NormalTok{  \}}
+  \ControlFlowTok{if}\NormalTok{(}\KeywordTok{sum}\NormalTok{(prior_ip) }\OperatorTok{!=}\StringTok{ }\DecValTok{1}\NormalTok{)}
+\NormalTok{    prior_ip =}\StringTok{ }\NormalTok{prior_ip }\OperatorTok{/}\StringTok{ }\KeywordTok{sum}\NormalTok{(prior_ip)}
+  
+  \CommentTok{# sample parameters}
+\NormalTok{  beta_}\DecValTok{0}\NormalTok{ =}\StringTok{ }\KeywordTok{sapply}\NormalTok{(}\DecValTok{1}\OperatorTok{:}\NormalTok{p, }\ControlFlowTok{function}\NormalTok{(x)\{}\KeywordTok{runif}\NormalTok{(sample_size, lower, higher)\})}
+\NormalTok{  beta_}\DecValTok{1}\NormalTok{ =}\StringTok{ }\KeywordTok{sapply}\NormalTok{(}\DecValTok{1}\OperatorTok{:}\NormalTok{p, }\ControlFlowTok{function}\NormalTok{(x)\{}\KeywordTok{rnorm}\NormalTok{(sample_size, mu0, sigma0)\})}
+  
+  \CommentTok{# calculate log-likelihood condition on only model}
+\NormalTok{  logp_likelihood =}\StringTok{ }\KeywordTok{sapply}\NormalTok{(}\DecValTok{1}\OperatorTok{:}\NormalTok{p, }\ControlFlowTok{function}\NormalTok{(j)\{}
+    \ControlFlowTok{if}\NormalTok{ (p }\OperatorTok{==}\StringTok{ }\DecValTok{1}\NormalTok{)\{}
+\NormalTok{      beta_}\DecValTok{0}\NormalTok{_j =}\StringTok{ }\NormalTok{beta_}\DecValTok{0}
+\NormalTok{      beta_}\DecValTok{1}\NormalTok{_j =}\StringTok{ }\NormalTok{beta_}\DecValTok{1}
+\NormalTok{      x_j =}\StringTok{ }\NormalTok{X}
+\NormalTok{    \}}\ControlFlowTok{else}\NormalTok{\{}
+\NormalTok{      beta_}\DecValTok{0}\NormalTok{_j =}\StringTok{ }\NormalTok{beta_}\DecValTok{0}\NormalTok{[, j]}
+\NormalTok{      beta_}\DecValTok{1}\NormalTok{_j =}\StringTok{ }\NormalTok{beta_}\DecValTok{1}\NormalTok{[, j]}
+\NormalTok{      x_j =}\StringTok{ }\NormalTok{X[, j]}
+\NormalTok{    \}}
+\NormalTok{    log_likelihood_j =}\StringTok{ }\KeywordTok{log}\NormalTok{(}\KeywordTok{mean}\NormalTok{(}\KeywordTok{exp}\NormalTok{(}\KeywordTok{sapply}\NormalTok{(}\DecValTok{1}\OperatorTok{:}\NormalTok{sample_size, }\ControlFlowTok{function}\NormalTok{(i)\{}
+      \KeywordTok{log_logistic_likelihood}\NormalTok{(x_j, Y, beta_}\DecValTok{0}\NormalTok{_j[i], beta_}\DecValTok{1}\NormalTok{_j[i])}
+\NormalTok{    \}))))}
+\NormalTok{    log_likelihood_j}
+\NormalTok{  \})}
+  
+  \CommentTok{# calculate PIP}
+\NormalTok{  logp_prior_ip =}\StringTok{ }\KeywordTok{log}\NormalTok{(prior_ip)}
+\NormalTok{  posterior_ip =}\StringTok{ }\KeywordTok{softmax}\NormalTok{(logp_prior_ip }\OperatorTok{+}\StringTok{ }\NormalTok{logp_likelihood)}
+  \KeywordTok{return}\NormalTok{(posterior_ip)}
+\NormalTok{\}}
 
-\hypertarget{simple-bayesian-logistic-regression}{%
-\subsubsection{Simple Bayesian Logistic
-Regression}\label{simple-bayesian-logistic-regression}}
 
-To make the whole problem testable, we first implement a Hamilton Monte
-Carlo(HMC) based vanilla logistic regression to fit the model. HMC is a
-well-known Monte Carlo method based on Hmamilton Dynamic in Physics. An
-brief introduction can be find
-\href{https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo}{here} . In
-this algorithm, we need to calculate the derivative of log-posterior
-distribution of each parameters.
 
-\hypertarget{fully-bayesian-model}{%
-\paragraph{Fully-Bayesian Model}\label{fully-bayesian-model}}
+\CommentTok{# simulate}
+\NormalTok{n =}\StringTok{ }\DecValTok{100}
+\NormalTok{mu0 =}\StringTok{ }\DecValTok{0}
+\NormalTok{sigma0 =}\StringTok{ }\DecValTok{1}
+\NormalTok{lower =}\StringTok{ }\DecValTok{-10}
+\NormalTok{higher =}\StringTok{ }\DecValTok{10}
+\NormalTok{X =}\StringTok{ }\KeywordTok{cbind}\NormalTok{(}\KeywordTok{rnorm}\NormalTok{(n), }\KeywordTok{rnorm}\NormalTok{(n, }\DecValTok{1}\NormalTok{), }\KeywordTok{rnorm}\NormalTok{(n, }\DecValTok{1}\NormalTok{, }\DecValTok{5}\NormalTok{))}
+\NormalTok{b =}\StringTok{ }\KeywordTok{c}\NormalTok{(}\DecValTok{2}\NormalTok{,}\DecValTok{5}\NormalTok{,}\OperatorTok{-}\DecValTok{2}\NormalTok{)}
+\NormalTok{Y =}\StringTok{ }\KeywordTok{rbinom}\NormalTok{(n, }\DecValTok{1}\NormalTok{, }\KeywordTok{sigmoid}\NormalTok{(X }\OperatorTok{%*%}\StringTok{ }\NormalTok{b }\OperatorTok{+}\StringTok{ }\DecValTok{2}\NormalTok{))}
 
-To get the complete fully-Bayesian model, we need to carefully write
-down the likelihood function, prior and posterior distributions:
-
-Likelihood:
-\(f(Y|X,b_0, b) = \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_ib)))^{1 - y_i}\)
-
-Prior: \(b_0 \varpropto 1\),
-\(\pi(b_i) \varpropto exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})\)..
-
-Fully Posterior:
-\(p(Y, b_0, b | X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i} * \prod_j^p exp(-\frac{(b_j - \mu_0)^2}{2\sigma_0^2})\)
-
-Marginal Posterior:
-\(p(b_0 | Y, b, X) \varpropto \prod_i^n (sigmoid(b_0 + X_ib ))^{y_i}(1 - sigmoid(b_0 + X_ib))^{1 - y_i}\),
-\$p(b\_j \textbar{} Y, b\_0, X) \varpropto \prod\_i\^{}n (sigmoid(b\_0 +
-X\_ib ))\^{}\{y\_i\}(1 - sigmoid(b\_0 + X\_ib))\^{}\{1 - y\_i\} *
-exp(-\frac{(b_j - \mu_0)^2}{2\sigma_0^2}) \$
-
-\hypertarget{fully-bayesian-model-1}{%
-\subsubsection{Fully-Bayesian Model}\label{fully-bayesian-model-1}}
-
-To get the complete fully-Bayesian model, we need to carefully write
-down the likelihood function, prior and posterior distributions:
-
-Likelihood:
-\(f(Y|X,b_0, b, g) = \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_i(b \odot g)))^{1 - y_i}\)
-
-Prior: \(b_0 \varpropto 1\),
-\(\pi(b_i) = \frac{1}{\sqrt{2\pi}\sigma_0}exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})\),
-\(\pi(g_{0i}) = \frac{1}{p}\), where \(p\) stands for the number of
-predictors.
-
-Fully Posterior:
-\(p(Y, b_0, b, g | X) \varpropto \prod_i^n (sigmoid(b_0 + X_i(b \odot g)))^{y_i}(1 - sigmoid(b_0 + X_i(b \odot g)))^{1 - y_i} * \prod_i^p \frac{1}{\sigma_0}exp(-\frac{(b_i - \mu_0)^2}{2\sigma_0^2})\)
-
-Marginal Posterior: \(p(b_0)\)
-
-\begin{Shaded}
-\begin{Highlighting}[]
-\KeywordTok{summary}\NormalTok{(cars)}
+\KeywordTok{BMA}\NormalTok{(X, Y, }\KeywordTok{rep}\NormalTok{(}\DecValTok{1}\OperatorTok{/}\KeywordTok{ncol}\NormalTok{(X), }\KeywordTok{ncol}\NormalTok{(X)), mu0, sigma0, lower, higher)}
 \end{Highlighting}
 \end{Shaded}
 
 \begin{verbatim}
-##      speed           dist       
-##  Min.   : 4.0   Min.   :  2.00  
-##  1st Qu.:12.0   1st Qu.: 26.00  
-##  Median :15.0   Median : 36.00  
-##  Mean   :15.4   Mean   : 42.98  
-##  3rd Qu.:19.0   3rd Qu.: 56.00  
-##  Max.   :25.0   Max.   :120.00
+## [1] 1.424108e-12 5.201328e-10 1.000000e+00
 \end{verbatim}
 
-\hypertarget{including-plots}{%
-\subsection{Including Plots}\label{including-plots}}
-
-You can also embed plots, for example:
-
-\includegraphics{Single_effect_files/figure-latex/pressure-1.pdf}
-
-Note that the \texttt{echo\ =\ FALSE} parameter was added to the code
-chunk to prevent printing of the R code that generated the plot.
+\hypertarget{the-rest-of-notebook-has-not-been-completed-yet-and-will-be-done-a-few-days-later.}{%
+\section{The rest of notebook has not been completed yet and will be
+done a few days
+later.}\label{the-rest-of-notebook-has-not-been-completed-yet-and-will-be-done-a-few-days-later.}}
 
 \end{document}
