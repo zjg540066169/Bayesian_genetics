@@ -1,9 +1,12 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2021) (preloaded format=pdflatex 2021.4.29)  1 MAY 2021 00:11
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2021) (preloaded format=pdflatex 2021.4.29)  7 MAY 2021 21:33
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**Single_effect.tex
-(./Single_effect.tex
+**"/Users/jungang/Documents/Bayesian Genetics/Bayesian_genetics/R_code/Single_e
+ffect.tex"
+
+(/Users/jungang/Documents/Bayesian Genetics/Bayesian_genetics/R_code/Single_eff
+ect.tex
 LaTeX2e <2020-10-01> patch level 4
 L3 programming layer <2021-02-18> (/Users/jungang/Library/TinyTeX/texmf-dist/te
 x/latex/base/article.cls
@@ -485,12 +488,12 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 l.229 \$p(y \textbar{} x\^{}j, \beta
                                     \_0\^{}j, \beta\_1\^{}j, M\^{}j)= 
 Here is how much of TeX's memory you used:
- 10377 strings out of 480954
- 150817 string characters out of 5906449
+ 10378 strings out of 480954
+ 151021 string characters out of 5906449
  452871 words of memory out of 5000000
  27423 multiletter control sequences out of 15000+600000
  443674 words of font info for 66 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 71i,6n,74p,312b,325s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 71i,6n,74p,382b,325s stack positions out of 5000i,500n,10000p,200000b,80000s
 
 !  ==> Fatal error occurred, no output PDF file produced!

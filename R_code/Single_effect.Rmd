@@ -1,8 +1,10 @@
 ---
 title: "Single_effect"
-output: pdf_document
 author: "Jungang Zou"
-date: 4/28/2021
+date: "4/28/2021"
+output:
+  html_document:
+    df_print: paged
 version: 1.0.0
 ---
 
