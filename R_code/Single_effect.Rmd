@@ -71,7 +71,7 @@ log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
 # output:
 # A vector of posterior inclusion probability for each variable.
 
-BMA = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000){
+BMA_simple = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000){
   # preparation
   n = nrow(X)
   p = ncol(X)
@@ -120,7 +120,7 @@ X = cbind(rnorm(n), rnorm(n, 1), rnorm(n, 1, 5))
 b = c(2,5,-2)
 Y = rbinom(n, 1, sigmoid(X %*% b + 2))
 
-BMA(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher)
+BMA_simple(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher)
 
 ```
 
@@ -128,22 +128,28 @@ BMA(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher)
 
 
 
-# The rest of notebook has not been completed yet and will be done a few days later.
+
 
 
 
 
 #### BMA with Inference based on NUTS
 
+Although in several genetic application, what we care about is only PIP. However, in another scenarios, we also concern about the statistical effect on each gene. Therefore the inference on the simple Bayesian logistic regression model should be done. In this sense, MCMC sampling model is applied to solve this difficult problem since Bayesian logistic regression consists of some complex expression and can not find the close form for posterior distributions of parameters. Considering about these continuous variables, Hamiltonian Monte Carlo Sampling(HMC) is what we need.
+
+As we know, HMC is well-known monte carlo method for high-dimensional data. The basic idea is borrowed from Hamilton System, which is a classical dynamic system in physics. A brief introduction of HMC can be found [here](https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo). However, HMC has several disadvantages. The most inconvenient one is that we need to tune 3 hyperparameters by hand: Mass Matrix(approximate to posterior variance), step size and step number. In empirical study, if these parameters are not well tuned, the MCMC chains are very hard to mix up and converge. In order to solve this problem, an advanced HMC algorithm call No-U-Turn Sampler(NUTS) are proposed in the [paper](https://arxiv.org/abs/1111.4246). Based on some complex mechanisms, these 3 parameters are tuned automatically.
+
+In this part, we coding a NUTS algorithm to for Bayesian logistic regression model. Also, a unified convergence diagnostics function is provided followed by Gelman-Rubin`s statistics. And in next part, the NUTS sampling algorithm and simple BMA model will make up the whole inference model.
+
+
 ```{r function_HMC}
-
-
+# calculate the log posterior probability for fully model.
 log_posterior = function(x, y, beta_0, beta_1, mu0, sigma0, tol = 1e-100){
   lm = beta_0 + beta_1 * x
   sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)) - (beta_1 - mu0)^2/(2 * sigma0^2)
 }
 
-
+# calculate gradient for each parameters.
 dlogp_dbeta0 = function(x, y, beta_0, beta_1){
   lm = beta_0 + beta_1 * x
   sum(y * (1 - sigmoid(lm)) + (y - 1) * sigmoid(lm))
@@ -154,7 +160,7 @@ dlogp_dbeta1 = function(x, y, beta_0, beta_1, mu0, sigma0){
   sum(y * x * (1 - sigmoid(lm)) + x * (y - 1) * sigmoid(lm)) - (beta_1 - mu0) / (sigma0^2)
 }
 
-
+# check if beta_0 is in accept region
 beta_0_in_region = function(lower, higher, beta_0){
   if (beta_0 <= higher || beta_0 >= lower)
     return(TRUE)
@@ -162,137 +168,238 @@ beta_0_in_region = function(lower, higher, beta_0){
     return(FALSE)
 }
 
-
-       
-
-
-leapfrog = function(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, L = 10, e = 0.1, accept_n = 0){
-  phi = rnorm(2, mean = c(0, 0), sd = sqrt(M))
-  beta_new = c(beta_0, beta_1)
-  phi_new = phi
-  for (i in 1:L) {
-    pd = c(dlogp_dbeta0(x, y, beta_new[1], beta_new[2]), dlogp_dbeta1(x, y, beta_new[1], beta_new[2], mu0, sigma0))
-    phi_new = phi_new + 0.5 * e * pd
+# build sampling binary tree followed the instruction in NUTS paper
+BuildTree = function(x, y, mu0, sigma0, lower, higher, beta, phi, u, v, j, e, delta_max = 1000){
+  if (j == 0){
+    e = e * v
+    pd = c(dlogp_dbeta0(x, y, beta[1], beta[2]), dlogp_dbeta1(x, y, beta[1], beta[2], mu0, sigma0))
+    phi = phi + 0.5 * e * pd
     
-    beta_new = beta_new + e * M_1 * phi_new
+    beta = beta + e * phi
     
-    pd = c(dlogp_dbeta0(x, y, beta_new[1], beta_new[2]), dlogp_dbeta1(x, y, beta_new[1], beta_new[2], mu0, sigma0))
-    phi_new = phi_new + 0.5 * e * pd
+    pd = c(dlogp_dbeta0(x, y, beta[1], beta[2]), dlogp_dbeta1(x, y, beta[1], beta[2], mu0, sigma0))
+    phi = phi + 0.5 * e * pd
     
     
-    if(!beta_0_in_region(lower, higher, beta_new[1]))
-            phi_new[1] = phi_new[1] * -1
+    if(!beta_0_in_region(lower, higher, beta[1]))
+            phi[1] = phi[1] * -1
     
-  }
-  
-  log_r = log_posterior(x, y, beta_new[1], beta_new[2], mu0, sigma0) - log_posterior(x, y, beta_0, beta_1, mu0, sigma0) + (phi_new^2 %*% M_1)[1,1] - (phi^2 %*% M_1)[1,1]
-  #print(exp(log_r))
-  if (log_r >= log(runif(1)) && beta_0_in_region(lower, higher, beta_new[1])){
-    #print("accept")
-    return(list(beta_0 = beta_new[1], beta_1 = beta_new[2], accept_n = accept_n + 1))
-  }else{
-    #print("reject")
-    return(list(beta_0 = beta_0, beta_1 = beta_1, accept_n = accept_n))
-  }
-  
-  
-}
-
-HMC = function(burn_n, sample_n, sample_gap = 2, x, y, beta_0, beta_1, mu0, sigma0, lower, higher, scale, L = 100, e = 0.01){
-  #M = c(1/(1/12 * (higher - lower)^2), 1/ (sigma0^2)) * scale
-  M = c(1, 1) * scale
-  M_1 = 1 / M
-  accept_n = 1
-  beta_0_sample = c()
-  beta_1_sample = c()
-  for (i in 1:burn_n) {
-    result = leapfrog(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, accept_n = accept_n)
-    beta_0 = result$beta_0
-    beta_1 = result$beta_1
-    accept_n = result$accept_n
-    #print(accept_n)
-  }
-  print(paste("accept rate in burn in phrase:", accept_n / burn_n))
-  accept_n = 1
-  for (i in 1:(sample_n * sample_gap)) {
-    result = leapfrog(x, y, beta_0, beta_1, M, M_1, mu0, sigma0, lower, higher, L = L, e = e, accept_n = accept_n)
-    beta_0 = result$beta_0
-    beta_1 = result$beta_1
-    accept_n = result$accept_n
-    if (i %% sample_gap == 0){
-      beta_0_sample = c(beta_0_sample, beta_0)
-      beta_1_sample = c(beta_1_sample, beta_1)
+    if(beta_0_in_region(lower, higher, beta[1]) && log(u) <= log_posterior(x, y, beta[1], beta[2], mu0, sigma0, tol = 1e-100) - 0.5 * phi %*% phi ){
+      C2 = c(beta, phi)
     }
-    
-    
+    else{
+      C2 = c()
+    }
+    s2 = (log(u) < log_posterior(x, y, beta[1], beta[2], mu0, sigma0, tol = 1e-100) - 0.5 * phi %*% phi + delta_max)
+    return(list(beta_negative = beta, phi_negative = phi, beta_positive = beta, phi_positive = phi, C2 = C2, s2 = s2))
   }
-  print(paste("accept rate in sample phrase:", accept_n / (sample_n * sample_gap)))
-  return(list(beta_0 = beta_0_sample, beta_1 = beta_1_sample))
+  else{
+      result = BuildTree(x, y, mu0, sigma0, lower, higher, beta, phi, u, v, j - 1, e)
+      beta_negative = result$beta_negative
+      phi_negative = result$phi_negative
+      beta_positive = result$beta_positive
+      phi_positive = result$phi_positive
+      C2 = result$C2
+      s2 = result$s2
+      if(v == -1){
+        result = BuildTree(x, y, mu0, sigma0, lower, higher, beta_negative, phi_negative, u, v, j - 1, e)
+        beta_negative = result$beta_negative
+        phi_negative = result$phi_negative
+        C3 = result$C2
+        s3 = result$s2
+      }
+      else{
+        result = BuildTree(x, y, mu0, sigma0, lower, higher, beta_positive, phi_positive, u, v, j - 1, e)
+        beta_positive = result$beta_positive
+        phi_positive = result$phi_positive
+        C3 = result$C2
+        s3 = result$s2
+      }
+      s2 = s2 * s3 * (((beta_positive - beta_negative) %*% phi_negative) >= 0) * (((beta_positive - beta_negative) %*% phi_positive) >= 0)
+      C2 = rbind(C2, C3)
+      return(list(beta_negative = beta_negative, phi_negative = phi_negative, beta_positive = beta_positive, phi_positive = phi_positive, C2 = C2, s2 = s2))
+  }
+}
+    
+
+# NUTS algorithm for sampling one sample. 
+NUTS = function(x, y, beta, mu0, sigma0, lower, higher, e = 0.1){
+  phi = rnorm(2, mean = c(0, 0), sd = c(1, 1))
+  u = runif(1, min = 0, max = exp(log_posterior(x, y, beta[1], beta[2], mu0, sigma0, tol = 1e-100) - 0.5 * phi %*% phi))
+  beta_negative = beta
+  beta_positive = beta
+  phi_negative = phi
+  phi_positive = phi
+  j = 0
+  C = c(beta, phi)
+  s = 1
+  while (s == 1) {
+    v_j = sample(c(1, -1), 1)
+    if (v_j == -1) {
+      result = BuildTree(x, y, mu0, sigma0, lower, higher, beta_negative, phi_negative, u, v_j, j, e)
+      beta_negative = result$beta_negative
+      phi_negative = result$phi_negative
+      C2 = result$C2
+      s2 = result$s2
+    }else{
+      result = BuildTree(x, y, mu0, sigma0, lower, higher, beta_positive, phi_positive, u, v_j, j, e)
+      beta_positive = result$beta_positive
+      phi_positive = result$phi_positive
+      C2 = result$C2
+      s2 = result$s2
+    }
+    #print(s2)
+    if (s2 == 1){
+      C = rbind(C, C2)
+    }
+    s = s2 * (((beta_positive - beta_negative) %*% phi_negative) >= 0) * (((beta_positive - beta_negative) %*% phi_positive) >= 0)
+    j = j + 1
+  }
+  return(C[sample.int(nrow(C), size = 1), ])
+}
+
+ 
+# The main sampling algorithm for Bayesian logistic regression
+# Input:
+# burn_n: an integer to specify the number of burn-in turns.
+# sample_n: an integer to specify the number of samplers.
+# sample_gap: an integer to specify the number of sampling gap, which mean we only get 1 samples from total gap samples. Basically, there are (sample_n * sample_gap) turns to sample after burn-in phrase.
+# x: a vector of genotype data, only for one gene.
+# y: a vector of phenotype data, only binary data(0 or 1) is allowed. 
+# beta_0: a scalar for initial value of $\beta_0$
+# beta_1: a scalar for initial value of $\beta_1$
+# mu0: a scalar to specify the prior normal mean of beta_1
+# sigma0: a scalar to specify the prior normal standard deviation of beta_1
+# lower: a scalar to specify the prior lower bound of uniform distribution for beta_0
+# higher: a scalar to specify the prior upper bound of uniform distribution for beta_0
+# e: the step size in NUTS algorithm
+
+# output:
+# A matrix, each row is a sample for (beta_0, beta_1)
+bayes_logit = function(burn_n, sample_n, sample_gap = 1, x, y, beta_0, beta_1, mu0, sigma0, lower, higher, e = 0.01){
+  beta_sample = c()
+  beta = c(beta_0, beta_1)
+  
+  # burn-in phrase
+  for (i in 1:burn_n) {
+    result = NUTS(x, y, beta, mu0, sigma0, lower, higher, e)
+    beta = result[c(1, 2)]
+  }
+  
+  # sampling phrase
+  for (i in 1:(sample_n * sample_gap)) {
+    result = NUTS(x, y, beta, mu0, sigma0, lower, higher, e)
+    beta = result[c(1, 2)]
+    # sampling gap
+    if (i %% sample_gap == 0){
+      beta_sample = rbind(beta_sample, beta)
+    }
+  }
+  return(beta_sample)
 }
 
 
+# The convergence diagnostics algorithm for Bayesian Logistic regression
+# Input:
+# beta_0: a list of samplers of beta_0 in multiple chains. 
+# beta_1: a list of samplers of beta_1 in multiple chains. 
+# plot_: a logical scalar, to decide whether the diagnostic plot is needed to output.
+
+# output:
+# A list of 2 element, one is the gelman-rubin`s statistics for beta_0, the other is for beta_1.
+HMC_convergence = function(beta_0, beta_1, plot_ = T){
+  beta_0_mcmc = lapply(beta_0, function(x) mcmc(x))
+  beta_1_mcmc = lapply(beta_1, function(x) mcmc(x))
+  
+  # diagnose for beta_0
+  combinedchains_beta_0 = mcmc.list(beta_0_mcmc)
+  if (plot_) {
+    plot(combinedchains_beta_0)
+    print(gelman.diag(combinedchains_beta_0))
+    gelman.plot(combinedchains_beta_0)
+  }
+  
+  
+  # diagnose for beta_1
+  combinedchains_beta_1 = mcmc.list(beta_1_mcmc)
+  if (plot_) {
+    plot(combinedchains_beta_1)
+    print(gelman.diag(combinedchains_beta_1))
+    gelman.plot(combinedchains_beta_1)
+  }
+  
+  return(list(beta0_gelman = gelman.diag(combinedchains_beta_0)$psrf[1], beta1_gelman = gelman.diag(combinedchains_beta_1)$psrf[1]))
+}
+
+# simulate
 n = 1000
 X = cbind(rnorm(n, 10), rnorm(n, 1), rnorm(n, 1, 5))
 X = X - colMeans(X)
 b = c(2,5,-2)
 Y = rbinom(n, 1, sigmoid(X %*% b + 2))
 x = X[, 1]
+y = Y
 
+
+# run 3 chains at different starting points
+beta0 = runif(1, lower, higher)
+beta1 = rnorm(1, mu0, sigma0)
+#beta = c(beta0, beta1)
+samples1 = bayes_logit(200, 200,2, x, Y, beta0, beta1, 0, 1, -10, 10, e = 0.01)
 
 beta0 = runif(1, lower, higher)
 beta1 = rnorm(1, mu0, sigma0)
-samples1 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100, L = 100, e = 0.01)
+samples2 = bayes_logit(200, 200,2, x, Y, beta0, beta1, 0, 1, -10, 10, e = 0.01)
 
 beta0 = runif(1, lower, higher)
 beta1 = rnorm(1, mu0, sigma0)
-samples2 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100, L = 100, e = 0.01)
-
-beta0 = runif(1, lower, higher)
-beta1 = rnorm(1, mu0, sigma0)
-samples3 = HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100, L = 100, e = 0.01)
-
-beta_0 = list(samples1$beta_0, samples2$beta_0, samples3$beta_0)
-beta_1 = list(samples1$beta_1, samples2$beta_1, samples3$beta_1)
-
-HMC_convergence = function(beta_0, beta_1){
-  beta_0_mcmc = lapply(beta_0, function(x) mcmc(x))
-  beta_1_mcmc = lapply(beta_1, function(x) mcmc(x))
-  combinedchains_beta_0 = mcmc.list(beta_0_mcmc)
-  plot(combinedchains_beta_0)
-  print(gelman.diag(combinedchains_beta_0))
-  gelman.plot(combinedchains_beta_0)
-  
-  combinedchains_beta_1 = mcmc.list(beta_1_mcmc)
-  plot(combinedchains_beta_1)
-  print(gelman.diag(combinedchains_beta_1))
-  gelman.plot(combinedchains_beta_1)
-}
-
-HMC_convergence(beta_0, beta_1)
-
-#for (i in 1:dim(result$y_pred)[2]) {
-#  combinedchains = mcmc.list(result$y_pred[, i], result2$y_pred[, i], result3$y_pred[, i]) 
-#  if(gelman.diag(combinedchains)[[1]][1] > 1.1)
-#    print(paste(i, gelman.diag(combinedchains)[[1]][1]))
-#}
+samples3 = bayes_logit(200, 200,2, x, Y, beta0, beta1, 0, 1, -10, 10, e = 0.01)
 
 
+# gather samples according to the input of HMC_convergence
+beta_0 = list(samples1[,1], samples2[,1], samples3[,1])
+beta_1 = list(samples1[,2], samples2[,2], samples3[,2])
+
+
+# get the convergence result
+convergence = HMC_convergence(beta_0, beta_1)
+
+convergence
 ```
 
+After the test for MCMC algorithm, we construct the BMA_inference algorithm based on NUTS and simple BMA. In addition, the function of multiple chains to check convergence are also provided inside the whole algorithm. If multiple chains are needed, then parallel computing for sampling will be used.
 
 
 
 
-```{r function_BMA}
-
-
+```{r function_BMA_inference}
+# calculate log-likelihood for a pair of parameters.
 log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
   lm = beta_0 + beta_1 * x
   return(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
 }
 
 
-BMA = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000, n_chain = 3){
+
+# the main algorithm of Bayesian Model Averaging with Inference
+# Input:
+# X: a matrix of genotype data. The process of centralization or normalization should be calculated before this algorithm if needed.
+# Y: a vector of phenotype data, only binary data(0 or 1) is allowed. 
+# prior_ip: prior inclusion probability for each model. The size of vector should be consistent with variables of X. If prior_ip is not normalized(sum to 1), a process of normalization will be done in algorithm.
+# mu0: a scalar to specify the prior normal mean of beta_1
+# sigma0: a scalar to specify the prior normal standard deviation of beta_1
+# lower: a scalar to specify the prior lower bound of uniform distribution for beta_0
+# higher: a scalar to specify the prior upper bound of uniform distribution for beta_0
+# sample_size: a scalar to specify the number of samples for parameters to perform Monte Carlo Integral for p(data | M_j)
+# n_chain : an integer to specify the number of chains needed in convergence diagnostics. And only the samples from the first chain will be returned.
+# burn_n: an integer to specify the number of burn-in turns.
+# sample_n: an integer to specify the number of samplers.
+# sample_gap: an integer to specify the number of sampling gap, which mean we only get 1 samples from total gap samples. Basically, there are (sample_n * sample_gap) turns to sample after burn-in phrase.
+# e: a scalar to specify the step size parameter in NUTS.
+
+# output:
+# A list. The first element is a vector of posterior inclusion probability for each variable. The second vector is Gelman-Rubin statistics and samples for each gene.
+BMA_inference = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000, n_chain = 3, burn_n = 200, sample_n = 200, sample_gap = 1, e = 0.01){
   n = nrow(X)
   p = ncol(X)
   if(length(prior_ip) != p){
@@ -305,21 +412,47 @@ BMA = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000, 
   
   
   
-  
+  # parallel sampling
   registerDoParallel(4)
   
+  # run sampling algorithm for each gene
   chains = sapply(1:p, function(j){
-    foreach(i = 1:n_chain, .combine = function(x, y) {list(beta_0 = cbind(x[["beta_0"]], y[["beta_0"]]), beta_1 = cbind(x[["beta_1"]], y[["beta_1"]])) }) %dopar% {
+    
+    # sample multiple chain
+    multiple_chains = foreach(i = 1:n_chain, .combine = cbind) %dopar% {
     beta0 = beta_0[i, j]
     beta1 = beta_1[i, j]
-    HMC(2000, 1000,2, x, Y, beta0, beta1, 0, 1, -10, 10, 100)
-  }
+    bayes_logit(burn_n, sample_n, sample_gap, x, Y, beta0, beta1, mu0, sigma0, lower, higher, e)
+    }
+    
+    result = list()
+    if (n_chain == 1) {
+      # if sample only one chain, then just return samples
+      result[["beta_0_samples"]] = beta_0[[1]]
+      result[["beta_1_samples"]] = beta_1[[1]]
+      result[["beta_0_mean"]] = mean(beta_0[[1]])
+      result[["beta_1_mean"]] = mean(beta_1[[1]])
+      return(result)
+    }
+    else{
+      # if sample for multiple chains, then Gelman-rubin`s statistics is calculated. The statistics and the samples from the first chain are returned.
+      beta_0 = list()
+      beta_1 = list()
+      for (i in 1:n_chain) {
+        beta_0[[i]] = multiple_chains[, i * 2 - 1]
+        beta_1[[i]] = multiple_chains[, i * 2]
+      }
+      result = HMC_convergence(beta_0, beta_1, plot_ = FALSE)
+      result[["beta_0_samples"]] = beta_0[[1]]
+      result[["beta_1_samples"]] = beta_1[[1]]
+      result[["beta_0_mean"]] = mean(beta_0[[1]])
+      result[["beta_1_mean"]] = mean(beta_1[[1]])
+      return(result)
+    }
   })
   
   
- 
-  
-  
+  # calculate log-likelihood condition on only model
   logp_likelihood = sapply(1:p, function(j){
     if (p == 1){
       beta_0_j = beta_0
@@ -335,14 +468,31 @@ BMA = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 10000, 
     }))))
     log_likelihood_j
   })
+  
+  # calculate PIP
   logp_prior_ip = log(prior_ip)
   posterior_ip = softmax(logp_prior_ip + logp_likelihood)
-  return(posterior_ip)
+  return(list(posterior_ip, chains))
 }
 
-BMA(X, Y, rep(1/ncol(X), ncol(X)), 0, 1, -10, 10)
-
+# simulate
+n = 1000
+X = cbind(rnorm(n, 10), rnorm(n, 1), rnorm(n, 1, 5))
+X = X - colMeans(X)
+b = c(2,5,-2)
+Y = rbinom(n, 1, sigmoid(X %*% b + 2))
+result = BMA_inference(X, Y, rep(1/ncol(X), ncol(X)), 0, 1, -10, 10)
+result
 ```
+
+
+
+
+
+
+
+
+# The rest of notebook has not been completed yet and will be done a few days later.
 
 
 ### Bayesian Variable Selection based Logistic Regression
