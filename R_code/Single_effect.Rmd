@@ -5,12 +5,13 @@ date: "4/28/2021"
 output:
   html_document:
     df_print: paged
-version: 1.0.0
+version: 1.0.1
 ---
 
 ```{r setup, include=TRUE}
 # import packages and define some useful mathematical functions
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
 library(parallel)
 library(doParallel)
 library(foreach)
@@ -21,6 +22,11 @@ sigmoid = function(x) return(1 / (1 + exp(-x)))
 softmax = function(x){
   e_x = exp(x - max(x))
   return(e_x / sum(e_x))
+}
+
+logsumexp = function(x){
+    c = max(x)
+    return(c + log(sum(exp(x - c))))
 }
 
 ```
@@ -58,6 +64,7 @@ log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
   lm = beta_0 + beta_1 * x
   return(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
 }
+
 
 # the main algorithm of Bayesian Model Averaging
 # Input:
@@ -98,9 +105,10 @@ BMA_simple = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 
       beta_1_j = beta_1[, j]
       x_j = X[, j]
     }
-    log_likelihood_j = log(mean(exp(sapply(1:sample_size, function(i){
+    log_likelihood_j = sapply(1:sample_size, function(i){
       log_logistic_likelihood(x_j, Y, beta_0_j[i], beta_1_j[i])
-    }))))
+    })
+    log_likelihood_j = logsumexp(log_likelihood_j - log(sample_size))
     log_likelihood_j
   })
   
@@ -173,19 +181,26 @@ beta_0_in_region = function(lower, higher, beta_0){
 # build sampling binary tree followed the instruction in NUTS paper
 BuildTree = function(x, y, mu0, sigma0, lower, higher, beta, phi, u, v, j, e, delta_max = 1000){
   if (j == 0){
-    e = e * v
-    pd = c(dlogp_dbeta0(x, y, beta[1], beta[2]), dlogp_dbeta1(x, y, beta[1], beta[2], mu0, sigma0))
-    phi = phi + 0.5 * e * pd
     
-    beta = beta + e * phi
+  
+      e = e * v
+      pd = c(dlogp_dbeta0(x, y, beta[1], beta[2]), dlogp_dbeta1(x, y, beta[1], beta[2], mu0, sigma0))
+      phi = phi + 0.5 * e * pd
+      
+      beta = beta + e * phi
+      
+      pd = c(dlogp_dbeta0(x, y, beta[1], beta[2]), dlogp_dbeta1(x, y, beta[1], beta[2], mu0, sigma0))
+      phi = phi + 0.5 * e * pd
+      
+      
+      if(!beta_0_in_region(lower, higher, beta[1])){
+        phi[1] = phi[1] * -1
+        
+      }
+              
     
-    pd = c(dlogp_dbeta0(x, y, beta[1], beta[2]), dlogp_dbeta1(x, y, beta[1], beta[2], mu0, sigma0))
-    phi = phi + 0.5 * e * pd
     
-    
-    if(!beta_0_in_region(lower, higher, beta[1]))
-            phi[1] = phi[1] * -1
-    
+
     if(beta_0_in_region(lower, higher, beta[1]) && log(u) <= log_posterior(x, y, beta[1], beta[2], mu0, sigma0, tol = 1e-100) - 0.5 * phi %*% phi ){
       C2 = c(beta, phi)
     }
@@ -372,8 +387,6 @@ convergence
 After the test for MCMC algorithm, we construct the BMA_inference algorithm based on NUTS and simple BMA. In addition, the function of multiple chains to check convergence are also provided inside the whole algorithm. If multiple chains are needed, then parallel computing for sampling will be used.
 
 
-
-
 ```{r function_BMA_inference}
 # calculate log-likelihood for a pair of parameters.
 log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
@@ -465,9 +478,10 @@ BMA_inference = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size
       beta_1_j = beta_1[, j]
       x_j = X[, j]
     }
-    log_likelihood_j = log(mean(exp(sapply(1:sample_size, function(i){
+    log_likelihood_j = sapply(1:sample_size, function(i){
       log_logistic_likelihood(x_j, Y, beta_0_j[i], beta_1_j[i])
-    }))))
+    })
+    log_likelihood_j = logsumexp(log_likelihood_j - log(sample_size))
     log_likelihood_j
   })
   
@@ -489,10 +503,28 @@ result
 
 
 
+```{r test}
+# test on real data
+
+y_path = r"(../data/deletion.X.colnames_b30.simu_dele_30_0528.y)"
+
+y = read_delim(y_path, "\n", col_names = "y", col_types = "i")
+Y = y$y
+
+X = read_delim("../data/block_439_442/block_439_442", "\t")
+
+X = as.matrix(X - colMeans(X))
 
 
-
-
+glm(Y~X, family = "binomial")
+#pi0 = 0.051366009925488
+mu0 = 0.783230896500752
+sigma0 = 0.816999481742865
+lower = -2.94
+higher = 0
+prior_ip = rep(1/ncol(X), ncol(X))
+bma = BMA_inference(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher, sample_size = 1000)
+```
 
 # The rest of notebook has not been completed yet and will be done a few days later.
 
