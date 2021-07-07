@@ -100,6 +100,16 @@ b = c(2,5,-2)
 Y = rbinom(n, 1, sigmoid(X %*% b + 2))
 
 
+
+y_path = r"(../data/deletion.X.colnames_b30.simu_dele_30_0528.y)"
+
+y = read_delim(y_path, "\n", col_names = "y", col_types = "i")
+Y = y$y
+
+X = read_delim("../data/block_439_442/block_439_442", "\t")
+
+X = as.matrix(X - colMeans(X))
+
 p0 = rep(1/length(b), length(b))
 
 

@@ -29,6 +29,12 @@ logsumexp = function(x){
     return(c + log(sum(exp(x - c))))
 }
 
+pi0 = 0.051366009925488
+mu = 0.783230896500752
+sigma = 0.816999481742865
+lower = -2.94
+upper = 0
+
 ```
 
 ## Genetic Association Selection based on Bayesian Methods
@@ -62,6 +68,10 @@ In our algorithm, we specify a uniform distribution on user-defined interval $[l
 # calculate log-likelihood for a pair of parameters.
 log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
   lm = beta_0 + beta_1 * x
+  
+  print(length(lm))
+  print(lm[1])
+  print(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
   return(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
 }
 
@@ -93,7 +103,7 @@ BMA_simple = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 
   # sample parameters
   beta_0 = sapply(1:p, function(x){runif(sample_size, lower, higher)})
   beta_1 = sapply(1:p, function(x){rnorm(sample_size, mu0, sigma0)})
-  
+  print(dim(beta_0))
   # calculate log-likelihood condition on only model
   logp_likelihood = sapply(1:p, function(j){
     if (p == 1){
@@ -108,10 +118,14 @@ BMA_simple = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 
     log_likelihood_j = sapply(1:sample_size, function(i){
       log_logistic_likelihood(x_j, Y, beta_0_j[i], beta_1_j[i])
     })
+    #print(log_likelihood_j)
     log_likelihood_j = logsumexp(log_likelihood_j - log(sample_size))
+    
     log_likelihood_j
   })
   
+  
+  print(logp_likelihood)
   # calculate PIP
   logp_prior_ip = log(prior_ip)
   posterior_ip = softmax(logp_prior_ip + logp_likelihood)
@@ -121,6 +135,7 @@ BMA_simple = function(X, Y, prior_ip, mu0, sigma0, lower, higher, sample_size = 
 
 
 # simulate
+set.seed(123213)
 n = 100
 mu0 = 0
 sigma0 = 1
@@ -130,8 +145,7 @@ X = cbind(rnorm(n), rnorm(n, 1), rnorm(n, 1, 5))
 b = c(2,5,-2)
 Y = rbinom(n, 1, sigmoid(X %*% b + 2))
 
-BMA_simple(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher)
-
+BMA_simple(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher, sample_size = n)
 ```
 
 
@@ -523,8 +537,14 @@ sigma0 = 0.816999481742865
 lower = -2.94
 higher = 0
 prior_ip = rep(1/ncol(X), ncol(X))
-bma = BMA_inference(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher, sample_size = 1000)
+bma = BMA_simple(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher, sample_size = 100000)
 ```
+block_439_442
+truth: 3.0467483110477334, 0.0, 0.0, 0.0
+simple(1000): 0.03772718 0.60047803 0.34093141 0.02086339
+simple(100000): 
+
+
 
 # The rest of notebook has not been completed yet and will be done a few days later.
 
