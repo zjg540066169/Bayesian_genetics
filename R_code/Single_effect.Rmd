@@ -68,10 +68,6 @@ In our algorithm, we specify a uniform distribution on user-defined interval $[l
 # calculate log-likelihood for a pair of parameters.
 log_logistic_likelihood = function(x, y, beta_0, beta_1, tol = 1e-100){
   lm = beta_0 + beta_1 * x
-  
-  print(length(lm))
-  print(lm[1])
-  print(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
   return(sum(y * log(sigmoid(lm) + tol) + (1 - y) * log(1 - sigmoid(lm) + tol)))
 }
 
@@ -526,24 +522,73 @@ y = read_delim(y_path, "\n", col_names = "y", col_types = "i")
 Y = y$y
 
 X = read_delim("../data/block_439_442/block_439_442", "\t")
-
-X = as.matrix(X - colMeans(X))
+X = as.matrix(X)
+#X = as.matrix(X - colMeans(X))
 
 
 glm(Y~X, family = "binomial")
 #pi0 = 0.051366009925488
-mu0 = 0.783230896500752
-sigma0 = 0.816999481742865
-lower = -2.94
-higher = 0
+mu0 = 0
+sigma0 = 1000000
+lower = -10
+higher = 10
 prior_ip = rep(1/ncol(X), ncol(X))
-bma = BMA_simple(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher, sample_size = 100000)
+bma = BMA_simple(X, Y, rep(1/ncol(X), ncol(X)), mu0, sigma0, lower, higher, sample_size = 1000)
 ```
-block_439_442
-truth: 3.0467483110477334, 0.0, 0.0, 0.0
-simple(1000): 0.03772718 0.60047803 0.34093141 0.02086339
-simple(100000): 
 
+
+#### BMA with classical logistic regression
+
+Since the BMA with bayesian logistic regression has some negative effect such as instability, which is sensitive to choice of prior and number of samplers, we change the direction to frequentist methods. In this section, we combine with BMA with logistic regression to calculate the PIP.
+
+
+```{r}
+# the algorithm of Bayesian Model Averaging with Classical logistic regression
+# Input:
+# X: a matrix of genotype data. The process of centralization or normalization should be calculated before this algorithm if needed.
+# Y: a vector of phenotype data, only binary data(0 or 1) is allowed. 
+# prior_ip: prior inclusion probability for each model. The size of vector should be consistent with variables of X. If prior_ip is not normalized(sum to 1), a process of normalization will be done in algorithm.
+
+# output:
+# A list. The first element is a vector of posterior inclusion probability for each variable. The second vector is beta_0 for each gene. The third vector is beta_1 for each gene.
+
+
+logistic_BMA = function(X, Y, prior_ip){
+  p = dim(X)[2]
+  if(length(prior_ip) != p){
+    stop("number of dimensions of prior inclusion probability and X are not consistent")
+  }
+  if(sum(prior_ip) != 1)
+    prior_ip = prior_ip / sum(prior_ip)
+  beta_0 = rep(0, p)
+  beta_1 = rep(0, p)
+  logp_likelihood = sapply(1:p, function(i){
+    x = X[, i]
+    model = glm(Y~x, family = "binomial")
+    beta0 = model$coefficients[1]
+    beta1 = model$coefficients[2]
+    beta_0[i] = beta0
+    beta_1[i] = beta1
+    return(list(log_logistic_likelihood(x, Y, beta0, beta1), beta0, beta1))
+  })
+  beta_0 = unlist(logp_likelihood[2, ])
+  beta_1 = unlist(logp_likelihood[3, ])
+  logp_likelihood = unlist(logp_likelihood[1, ])
+  logp_prior_ip = log(prior_ip)
+  posterior_ip = softmax(logp_prior_ip + logp_likelihood)
+  return(list(posterior_ip = posterior_ip, beta_0 = beta_0, beta_1 = beta_1))
+}
+
+
+y_path = r"(../data/deletion.X.colnames_b30.simu_dele_30_0528.y)"
+
+y = read_delim(y_path, "\n", col_names = "y", col_types = "i")
+Y = y$y
+
+X = read_delim("../data/block_439_442/block_439_442", "\t")
+X = as.matrix(X)
+logistic_BMA(X, Y, rep(1/ncol(X), ncol(X)) )
+```
 
 
 # The rest of notebook has not been completed yet and will be done a few days later.
@@ -595,6 +640,8 @@ Fully Posterior: $p(Y, b_0, b, g | X) \varpropto \prod_i^n (sigmoid(b_0 + X_i(b 
 
 
 Marginal Posterior: $p(b_0)$
+
+
 
  
 
